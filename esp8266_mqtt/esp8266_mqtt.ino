@@ -2,27 +2,35 @@
 #include <PubSubClient.h>
 #include <Ticker.h>
 #include <ArduinoJson.h>
+#include "DHT.h"
+#define DHTTYPE DHT11
+#define dht_dpin D3
+#define LEDpin D5
 
 const char* ssid = "ChinaNet-zFQ6";
 const char* password = "vdtkpnuw";
 const char* mqttServer = "47.115.60.188";
-const String pubtopic = "subtest";
 const String subtopic = "pubtest";
+float h;
+float t;
 
 Ticker ticker;
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 const size_t capacity = JSON_OBJECT_SIZE(1) + 15;
 DynamicJsonDocument doc(capacity);
+DHT dht(dht_dpin, DHTTYPE); 
 
 void setup() {
   // put your setup code here, to run once:
   //打开串口
+  dht.begin();
   Serial.begin(115200);
   
   pinMode(LED_BUILTIN, OUTPUT);     // 设置板上LED引脚为输出模式
-  pinMode(A0, INPUT);
   digitalWrite(LED_BUILTIN, HIGH);  // 启动后关闭板上LED
+  pinMode(LEDpin, OUTPUT);     // 设置D3引脚为输出模式
+  digitalWrite(LEDpin, HIGH);  // 启动后关闭板上LED 
   //链接WiFi
   connectWifi();
 
@@ -35,7 +43,7 @@ void setup() {
   //链接mqtt服务器
   connectMQTTServer();
 
-  ticker.attach(5,pubMQTTmsg);
+  ticker.attach(3,pubMQTTmsg);
 
 }
 
@@ -49,6 +57,9 @@ void loop() {
   }else{
     connectMQTTServer();
   }
+  h = dht.readHumidity();
+  t = dht.readTemperature();
+  delay(1000);
 }
 
 //链接mqtt服务器
@@ -71,21 +82,19 @@ void connectMQTTServer(){
 //发布消息
 void pubMQTTmsg(){
   String topic="subtest";
-  
- 
   //String topicString = "Taichi-Maker-Pub-" + WiFi.macAddress();
   char publishTopic[topic.length() + 1];  
   strcpy(publishTopic, topic.c_str());
  
   // 建立发布信息。信息内容以Hello World为起始，后面添加发布次数。
-  String message="{\"temperature\":"+(String)analogRead(A0)+"}";
+  String message="{\"temperature\":"+(String)t+",\"humidity\":"+(String)h+"}";
   char publishMsg[message.length() + 1];   
   strcpy(publishMsg, message.c_str());
   
   // 实现ESP8266向主题发布信息
   if(mqttClient.publish(publishTopic, publishMsg)){
-    Serial.print("Publish Topic:");
-    Serial.println(publishTopic);
+//    Serial.print("Publish Topic:");
+//    Serial.println(publishTopic);
     Serial.print("Publish message:");
     Serial.println(publishMsg);    
   } else {
@@ -95,14 +104,9 @@ void pubMQTTmsg(){
 
 // 订阅指定主题
 void subscribeTopic(String topic){
- 
-  // 建立订阅主题。主题名称以Taichi-Maker-Sub为前缀，后面添加设备的MAC地址。
-  // 这么做是为确保不同设备使用同一个MQTT服务器测试消息订阅时，所订阅的主题名称不同
-  //String topicString = "Taichi-Maker-Sub-" + WiFi.macAddress();
   char subTopic[topic.length() + 1];  
   strcpy(subTopic, topic.c_str());
 
-  // 通过串口监视器输出是否成功订阅主题以及订阅的主题名称
   if(mqttClient.subscribe(subTopic)){
     Serial.print("Subscrib Topic:");
     Serial.println(subTopic);
@@ -128,11 +132,11 @@ void receiveCallback(char* topic, byte* payload, unsigned int length) {
   int LED = doc["LED_status"].as<int>();
   
   if(LED==1){
-    digitalWrite(LED_BUILTIN, 1);
-    Serial.println("LED ON. command："+(String)LED);
-  }else if(LED==0){
-    digitalWrite(LED_BUILTIN, 0); 
+    digitalWrite(LEDpin, 1);
     Serial.println("LED OFF. command："+(String)LED);
+  }else if(LED==0){
+    digitalWrite(LEDpin, 0); 
+    Serial.println("LED ON. command："+(String)LED);
   }
   
 }
